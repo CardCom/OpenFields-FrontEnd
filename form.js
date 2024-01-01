@@ -8,14 +8,15 @@ document.addEventListener("DOMContentLoaded", () => {
     var iframeMessage = {}
     document.getElementById('continue').addEventListener('click', nextScreen)
 
-    function nextScreen() {
+    function nextScreen(event) {
+        event.preventDefault();
         //create a low profile deal 
         const url = "http://127.0.0.1:8000" //your backend url
 
         fetch(`${url}/init`).then(async res => {
             const json = await res.json()
             lowProfileCode = json.LowProfileId//add try / catch here - make sure you have the id. 
-
+            console.log("lowProfileCode", lowProfileCode)
             //change displays
             firstSceen.style.display = 'none'
             secondSceen.style.display = 'block'
@@ -52,14 +53,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         //3.Store your CSS in a string variable 
         const inlineCSS = `body {
-                            margin: 0
-                        }
-                        #cardNumber {
-                            border: 1px solid #ccc
-                            border-radius: 3px
-                            width: 100%
-                            height: 20px
-                            margin: 0
+                            margin: 0;
+                            padding:0;
+                            display: flex;
                         }`
 
         //Note: props names are important
@@ -67,14 +63,17 @@ document.addEventListener("DOMContentLoaded", () => {
             action: 'init',
             cardFieldCSS: cardCssText,
             cvvFieldCSS: template.innerText.toString(),
+            reCaptchaFieldCSS: inlineCSS,
             placeholder: "1111-2222-3333-4444",
             lowProfileCode: lowProfileCode,
         }
 
         //to prevent a race condition: will be fixed in the next version.
-        setTimeout(() => {
-            iframe.contentWindow.postMessage(iframeMessage, '*')
-        }, 1000)
+        // setTimeout(() => {
+        //     iframe.contentWindow.postMessage(iframeMessage, '*')
+        // }, 1000)
+
+        iframe.contentWindow.postMessage(iframeMessage, '*')
 
     }
 
@@ -85,16 +84,49 @@ document.addEventListener("DOMContentLoaded", () => {
         switch (msg.action) {
             case "HandleSubmit":
                 //redirect to your succssess page here
+                console.log("HandleSubmit", msg);
                 handleSubmitResult(msg.data)
                 break
             case "HandleEror":
                 //redirect to your error page / display error popup here
                 loading.style.display = 'none'
+                console.log("HandleEror", msg);
                 alert(msg.message)
-                break
+                break;
+            case "handleValidations":
+                if (msg.field === "cvv")
+                    setCvvFieldClass(msg.isValid);
+                if (msg.field === "cardNumber")
+                    setCardNumberClass(msg.isValid);
+                if(msg.field === "reCaptcha"){
+                    //if you want to enable the "pay" button after all iframe fields have beed validated
+                }
             default:
-                break
+                break;
         }
+    }
+
+    function setCvvFieldClass(isValid) {
+        if (!isValid) {
+            iframe.contentWindow.postMessage({
+                action: 'addCvvFieldClass',
+                className: "invalid"
+            }, '*');
+        }
+        else {
+
+            iframe.contentWindow.postMessage({
+                action: 'removeCvvFieldClass',
+                className: "invalid"
+            }, '*');
+        }
+    }
+
+    function setCardNumberClass(isValid) {
+        if (isValid)
+            iframe.contentWindow.postMessage({ action: 'removeCardNumberFieldClass', className: "invalid" }, '*');
+        else
+            iframe.contentWindow.postMessage({ action: 'addCardNumberFieldClass', className: "invalid" }, '*');
     }
 
     function handleSubmitResult(data) {
@@ -113,6 +145,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 })
 
+//this method allows to update the card holder details info to be used in Google Pay transactions
+//
+function setCardOwnerDetails(e) {
+
+    //update card holder details: name, email and phone 
+    const data = {
+        cardOwnerName: document.getElementById('cardOwnerName').value,
+        cardOwnerEmail: document.getElementById('cardOwnerEmail').value,
+        cardOwnerPhone: '054512345678',
+    }
+    const iframe = document.querySelector('#CardComMasterFrame')
+    iframe.contentWindow.postMessage({ action: 'setCardOwnerDetails', data }, '*')
+}
+
 function submitForm(e) {
     const loading = document.getElementById('loading')
     const iframe = document.querySelector('#CardComMasterFrame')
@@ -122,15 +168,55 @@ function submitForm(e) {
 
     const formProps = {
         action: 'doTransaction',
-        cardOwnerId: 123465789,
+        cardOwnerId: '000000000',//sending zeros to pass luhn algorithm check
         cardOwnerName: document.getElementById('cardOwnerName').value,
         cardOwnerEmail: document.getElementById('cardOwnerEmail').value,
         expirationMonth: document.getElementById('expirationMonth').value,
         expirationYear: document.getElementById('expirationYear').value,
-        numberOfPayments: "1",
+        document: createDocument()
+        //numberOfPayments: "1",
     }
 
     iframe.contentWindow.postMessage({
         ...formProps
     }, '*')
+}
+
+
+//this is an example of Document object as in https://secure.cardcom.solutions/swagger/index.html?url=/swagger/v11/swagger.json#tag/LowProfile/operation/LowProfile_Create
+//Used for creating documents (invoice, etc)
+function createDocument(){
+    return {
+        Name: "Cardcom", 
+        Email: "support@cardcom.solutions.co.il",
+        IsSendByEmail: false,
+        AddressLine1: "Harokmin 26", 
+        AddressLine2: "Azrieli Center",
+        City: "Holon", 
+        Mobile: "054123465789",
+        Phone: "03-9436100",
+        Comments: "Your comments", 
+        IsVatFree: false,
+        DepartmentId: 123,
+        ExternalId: "external-id",
+        IsAllowEditDocument: false,
+        IsShowOnlyDocument:  false,
+        Language: "he",
+        DocumentTypeToCreate: "Receipt", //see swagger for full list
+        AdvancedDocumentDefinition: {
+            IsAutoCreateUpdateAccount: "auto", //"true", "false", "auto"
+            AccountForeignKey: "key",
+            SiteUniqueId: "",
+            AccountID: 1,
+            IsLoadInfoFromAccountID: false
+        },
+        Products: [{
+            ProductID: "ui-321", 
+            Description:"Description",
+            Quantity: 1,
+            UnitCost: 9.99,
+            TotalLineCost: 9.99, 
+            IsVatFree: false
+        }]
+    }
 }
