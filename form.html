@@ -10,7 +10,7 @@
     <script>
         var cardcom3DSScript = document.createElement('script');
         const time = new Date().getTime();
-        cardcom3DSScript.setAttribute('src', 'http://localhost:61240/External/OpenFields/3DS.js?v=' + time);
+        cardcom3DSScript.setAttribute('src', 'https://secure.cardcom.solutions/External/OpenFields/3DS.js?v=' + time);
         document.head.appendChild(cardcom3DSScript);
     </script>
     <title>Cardcom Example</title>
@@ -82,10 +82,10 @@
                         <!-- The master frame has no UI: keep it out of the accessibility tree and the tab order. -->
                         <iframe id="CardComMasterFrame" name="CardComMasterFrame" allow="payment"
                             aria-hidden="true" tabindex="-1"
-                            src="http://localhost:61240/api/openfields/master?language=he"
+                            src="https://secure.cardcom.solutions/api/openfields/master?language=he"
                             style="display: block;width:0px;height:0px;"></iframe>
                         <iframe id="CardComCardNumber" name="CardComCardNumber" allow="payment" title="Credit card number"
-                            src="http://localhost:61240/api/openfields/cardNumber?language=he"
+                            src="https://secure.cardcom.solutions/api/openfields/cardNumber?language=he"
                             style="width:100%;height:57px;"></iframe>
                         <div class="expDate">
                             <div class="expMonth">
@@ -101,7 +101,7 @@
                             <div class="cvv">
                                 <label class="cvv-label" id="cvv-label">CVV</label>
                                 <iframe id="CardComCvv" name="CardComCvv" allow="payment" title="Security code (CVV)"
-                                    src="http://localhost:61240/api/openfields/CVV?language=he"
+                                    src="https://secure.cardcom.solutions/api/openfields/CVV?language=he"
                                     style="max-width: 188px;height:57px;"></iframe>
                             </div>
                         </div>
@@ -113,10 +113,10 @@
                             <!-- Hidden by default; revealed after the master frame reports availability
                                  via the 'initialized' message. The terminalNumber must match TERMINAL_NUMBER in form.js. -->
                             <iframe id="CardComApplePay" name="CardComApplePay" allow="payment" title="Apple Pay"
-                                src="http://localhost:61240/api/openfields/ApplePay?terminalNumber=1000&language=he"
+                                src="https://secure.cardcom.solutions/api/openfields/ApplePay?terminalNumber=1000&language=he"
                                 style="display:none; width:100%; height:48px; border:none; margin-bottom:10px;"></iframe>
                             <iframe id="CardComGooglePay" name="CardComGooglePay" allow="payment" title="Google Pay"
-                                src="http://localhost:61240/api/openfields/GooglePay?terminalNumber=1000&language=he"
+                                src="https://secure.cardcom.solutions/api/openfields/GooglePay?terminalNumber=1000&language=he"
                                 style="display:none; width:100%; height:48px; border:none;"></iframe>
                         </div>
                     </div>
@@ -126,7 +126,7 @@
         <div class="footer">
             <!-- credits supported languages: en, he. types: short, long -->
             <iframe id="CardcomCredits" name="CardcomCredits" title="Cardcom"
-                src="http://localhost:61240/api/openfields/credits?language=he&type=long" width="100%" height="100%"
+                src="https://secure.cardcom.solutions/api/openfields/credits?language=he&type=long" width="100%" height="100%"
                 style="z-index: 2;"></iframe>
         </div>
 
