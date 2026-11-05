@@ -1,79 +1,37 @@
 
 
+// Configure your terminal number here.
+// In production, return this from your backend /init endpoint.
+const TERMINAL_NUMBER = 1000;
+var lowProfileCode = undefined;
+var iframeMessage = {};
+var iframe = null;
+var loading = null;
+
 document.addEventListener("DOMContentLoaded", () => {
-    var lowProfileCode = undefined;
     const firstSceen = document.getElementById('first-screen');
     const secondSceen = document.getElementById('second-screen');
-    const iframe = document.querySelector('#CardComMasterFrame');
-    const loading = document.getElementById('loading');
-
-    var iframeMessage = {};
+    iframe = document.querySelector('#CardComMasterFrame');
+    loading = document.getElementById('loading');
     document.getElementById('continue').addEventListener('click', nextScreen);
+
+    //set the expiration year to a valid year for testing purposes. In production, you should set the year options according to the current year.
+    const expirationYearInput = document.getElementById('expirationYear');
+    const currentYear = new Date().getFullYear();
+    expirationYearInput.value = currentYear + 1;
 
     function nextScreen(event) {
         event.preventDefault();
-        //create a low profile deal 
-        const url = "http://127.0.0.1:8000"; //your backend url
+        //change displays
+        firstSceen.style.display = 'none';
+        secondSceen.style.display = 'block';
 
-        fetch(`${url}/init`).then(async res => {
-            const json = await res.json();
-            lowProfileCode = json.LowProfileId//add try / catch here - make sure you have the id. 
-            console.log("lowProfileCode", lowProfileCode);
-            //change displays
-            firstSceen.style.display = 'none';
-            secondSceen.style.display = 'block';
+        //setup event listeners and form submission
+        window.addEventListener("message", handleFrameMessages);
+        handleFormSubmit();
 
-            //handle iframes CSS
-            await loadIframesCss();
-
-            //handle submition response: redirect / display succsess popup etc.
-            window.addEventListener("message", handleFrameMessages);
-
-            //one way of submitting the form
-            handleFormSubmit();
-
-        })
-            .catch(err => {
-                console.error(err);
-                loading.style.display = 'none';
-                alert('Could not create LP deal ', err);
-            })
-    }
-
-    async function loadIframesCss() {
-        /*
-            You have several ways to fetch your CSS to be sent to CardCom iframe: regular *.css file, template element or plain text
-            Eventually you need to send a string that represents valid CSS rules
-        */
-
-        // 1.Fetching CSS from files
-        const cardCSSPromise = await fetch('../styles/cardNumber.css');
-        const cardCssText = await cardCSSPromise.text();
-
-        //2.In template element
-        const template = document.getElementById('css_template').content.querySelector('style')
-
-        //3.Store your CSS in a string variable 
-        const inlineCSS = `body {
-                            margin: 0;
-                            padding:0;
-                            display: flex;
-                        }`
-
-        //Note: props names are important
-        iframeMessage = {
-            action: 'init',
-            cardFieldCSS: cardCssText,
-            cvvFieldCSS: template.innerText.toString(),
-            reCaptchaFieldCSS: inlineCSS,
-            placeholder: "1111-2222-3333-4444",
-            cvvPlaceholder: "123",
-            lowProfileCode: lowProfileCode,
-            //language: "he"
-        }
-
-        iframe.contentWindow.postMessage(iframeMessage, '*');
-
+        //initialize payment flow for credit card form
+        initializePaymentFlow();
     }
 
     function handleFrameMessages(message) {
@@ -81,16 +39,27 @@ document.addEventListener("DOMContentLoaded", () => {
         const msg = message.data
 
         switch (msg.action) {
+            case "initialized":
+                // Reveal each wallet iframe based on device/browser availability.
+                // The native button is rendered inside the iframe. 'initialized' may
+                // fire more than once as each wallet reports its status.
+                if (msg.isGooglePayAvailable)
+                    document.getElementById('CardComGooglePay').style.display = 'block';
+                if (msg.isApplePayAvailable)
+                    document.getElementById('CardComApplePay').style.display = 'block';
+                break;
             case "HandleSubmit":
                 //redirect to your succssess page here
                 console.log("HandleSubmit", msg);
                 handleSubmitResult(msg.data);
-                break
+                break;
             case "HandleEror":
                 //redirect to your error page / display error popup here
                 loading.style.display = 'none';
                 console.log("HandleEror", msg);
-                alert(msg.message)
+                // message can be a string (server errors) or an array of strings (validation errors)
+                const errorText = Array.isArray(msg.message) ? msg.message.join('\n') : msg.message;
+                alert(errorText);
                 break;
             case "handleValidations":
                 if (msg.field === "cvv");
@@ -143,8 +112,87 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 })
 
-//this method allows to update the card holder details info to be used in Google Pay transactions
-//
+async function loadIframesCss() {
+    /*
+        You have several ways to fetch your CSS to be sent to CardCom iframe: regular *.css file, template element or plain text
+        Eventually you need to send a string that represents valid CSS rules
+    */
+
+    // 1.Fetching CSS from files
+    const cardCSSPromise = await fetch('../styles/cardNumber.css');
+    const cardCssText = await cardCSSPromise.text();
+
+    //2.In template element
+    const template = document.getElementById('css_template').content.querySelector('style')
+
+    //3.Store your CSS in a string variable 
+    const inlineCSS = `body {
+                        margin: 0;
+                        padding:0;
+                        display: flex;
+                    }`
+
+    //Note: props names are important
+    iframeMessage = {
+        action: 'init',
+        cardFieldCSS: cardCssText,
+        cvvFieldCSS: template.innerText.toString(),
+        reCaptchaFieldCSS: inlineCSS,
+        placeholder: "1111-2222-3333-4444",
+        cvvPlaceholder: "123",
+        lowProfileCode: lowProfileCode,
+        // Language of the messages returned by the master frame ('he' | 'en').
+        // Keep it in sync with the ?language= query parameter on the iframe URLs in form.html.
+        language: "he",
+
+        // Wallet button design — forwarded to the Google Pay / Apple Pay iframes.
+        googlePayButton: { buttonColor: 'black', buttonType: 'buy', buttonSizeMode: 'fill', buttonRadius: 4, buttonLocale: 'en' },
+        applePayButton: { type: 'buy', buttonstyle: 'black', locale: 'en-US' },
+    }
+
+    iframe.contentWindow.postMessage(iframeMessage, '*');
+}
+
+async function initializePaymentFlow() {
+    // Skip if already initialized
+    if (lowProfileCode) {
+        return true;
+    }
+
+    // Create a low profile deal and initialize the payment iframes
+    const url = "http://127.0.0.1:8000"; //your backend url
+
+    try {
+        loading.style.display = 'flex';
+        const res = await fetch(`${url}/init`);
+        const json = await res.json();
+        lowProfileCode = json.LowProfileId; //add try / catch here - make sure you have the id.
+        console.log("lowProfileCode", lowProfileCode);
+
+        // Google Pay and Apple Pay each render inside their own visible iframe
+        // (CardComGooglePay / CardComApplePay). The master frame initializes them
+        // from the LP settings; we reveal them on the 'initialized' message
+        // (isGooglePayAvailable / isApplePayAvailable). No trigger call is needed —
+        // the user clicks the native button inside the iframe.
+
+        //handle iframes CSS
+        await loadIframesCss();
+
+        loading.style.display = 'none';
+        return true;
+    } catch (err) {
+        console.error(err);
+        loading.style.display = 'none';
+        alert('Could not initialize payment: ' + err.message);
+        return false;
+    }
+}
+
+// Wallet payments no longer use a trigger call — the user clicks the native button
+// inside the CardComGooglePay / CardComApplePay iframe, which opens the sheet and
+// submits the token to Cardcom directly. Push cardholder details via
+// setCardOwnerDetails so they reach the wallet sheets before payment.
+
 function setCardOwnerDetails(e) {
 
     //update card holder details: name, email and phone 
